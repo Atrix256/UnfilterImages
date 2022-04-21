@@ -279,8 +279,8 @@ int main(int argc, char** argv)
 
     return 0;
 }
-// TODO: try box filtering an image and use this to undo it
-// TODO: could try something other than box, like tent.
-// TODO: could try a sharpening filter
+
 // TODO: could show the DFTs
+// TODO: could try a sharpening filter
 // TODO: it isn't working for filters that aren't box filter. should investigate why.
+// TODO: it isn't working for an image that you did an actual 3x3 box filter on either!
