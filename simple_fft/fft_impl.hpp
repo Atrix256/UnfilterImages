@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2013-2020 Dmitry Ivanov
+ *
+ * This file is a part of Simple-FFT project and is distributed under the terms
+ * of MIT license: https://opensource.org/licenses/MIT
+ */
+
 #ifndef __SIMPLE_FFT__FFT_IMPL_HPP__
 #define __SIMPLE_FFT__FFT_IMPL_HPP__
 
@@ -26,10 +33,7 @@ enum FFT_direction
 // via "complement and compare" method
 inline bool isPowerOfTwo(const size_t num)
 {
-    if ((num == 0) || !(num & (~num + 1)))
-        return false;
-
-    return true;
+    return num && (!(num & (num - 1)));
 }
 
 inline bool checkNumElements(const size_t num_elements, const char *& error_description)
