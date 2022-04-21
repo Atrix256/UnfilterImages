@@ -14,11 +14,11 @@
 
 #include <vector>
 
-static const char* c_inputFile = "../blurry.png";
-static const char* c_outFilePNG = "out/blurry.div.png";
-static const char* c_outFileHDR = "out/blurry.div.hdr";
-static const char* c_outFilePNG2 = "out/blurry2.div.png";
-static const char* c_outFileHDR2 = "out/blurry2.div.hdr";
+static const char* c_inputFile = "../clear.png";
+static const char* c_outFilePNG = "out/clear.div.png";
+static const char* c_outFileHDR = "out/clear.div.hdr";
+static const char* c_outFilePNG2 = "out/clear2.div.png";
+static const char* c_outFileHDR2 = "out/clear2.div.hdr";
 
 float c_kernel[] =
 {
@@ -283,3 +283,4 @@ int main(int argc, char** argv)
 // TODO: could try something other than box, like tent.
 // TODO: could try a sharpening filter
 // TODO: could show the DFTs
+// TODO: it isn't working for filters that aren't box filter. should investigate why.
