@@ -149,7 +149,7 @@ void AntiConvolve(ComplexImage2D& pixels, ComplexImage2D& kernel)
 
     // Anti convolve
     for (size_t i = 0; i < pixelsFT.pixels.size(); ++i)
-        pixelsFT.pixels[i] *= kernelFT.pixels[i];
+        pixelsFT.pixels[i] /= kernelFT.pixels[i];
 
     // Inverse DFT the image
     error = nullptr;
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
 
         for (int iy = 0; iy < c_kernelHeight; ++iy)
             for (int ix = 0; ix < c_kernelWidth; ++ix)
-                kernel.pixels[iy * c_kernelWidth + ix] /= sum;
+                kernel.pixels[iy * c_kernelWidth + ix] = c_kernel[iy * c_kernelWidth + ix] / sum;
     }
 
     // calculate the size that the images need to be, to be multiplied in frequency space
@@ -214,12 +214,12 @@ int main(int argc, char** argv)
     }
 
     // put the image back together
-    std::vector<unsigned char> outputPixels(width * height * components);
+    std::vector<unsigned char> outputPixels(pixels[0].m_width * pixels[0].m_height * components);
     for (size_t i = 0; i < outputPixels.size(); ++i)
         outputPixels[i] = (unsigned char)Clamp((float)pixels[i % components].pixels[i / components].real() * 256.0f, 0.0f, 255.0f);
 
     // write the output file
-    stbi_write_png(c_outFile, width, height, components, outputPixels.data(), 0);
+    stbi_write_png(c_outFile, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
 
     return 0;
 }
