@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
+#include <direct.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb/stb_image.h"
@@ -14,7 +15,10 @@
 #include <vector>
 
 static const char* c_inputFile = "../blurry.png";
-static const char* c_outFile = "blurry.div.png";
+static const char* c_outFilePNG = "out/blurry.div.png";
+static const char* c_outFileHDR = "out/blurry.div.hdr";
+static const char* c_outFilePNG2 = "out/blurry2.div.png";
+static const char* c_outFileHDR2 = "out/blurry2.div.hdr";
 
 float c_kernel[] =
 {
@@ -158,8 +162,38 @@ void AntiConvolve(ComplexImage2D& pixels, ComplexImage2D& kernel)
         printf(error);
 }
 
+void Convolve(ComplexImage2D& image, const ComplexImage2D& kernel)
+{
+    int startx = -(int)kernel.m_width / 2;
+    int starty = -(int)kernel.m_height / 2;
+
+    ComplexImage2D ret(image.m_width, image.m_height);
+
+    for (int iy = 0; iy < (int)image.m_height; ++iy)
+    {
+        for (int ix = 0; ix < (int)image.m_width; ++ix)
+        {
+            for (int ky = 0; ky < kernel.m_height; ++ky)
+            {
+                int sy = (ky + iy + starty + (int)image.m_height) % (int)image.m_height;
+
+                for (int kx = 0; kx < kernel.m_width; ++kx)
+                {
+                    int sx = (kx + ix + startx + (int)image.m_width) % (int)image.m_width;
+
+                    ret(ix, iy) += image(sx, sy) * kernel(kx, ky);
+                }
+            }
+        }
+    }
+
+    image = ret;
+}
+
 int main(int argc, char** argv)
 {
+    _mkdir("out");
+
     // Load the image
     std::vector<ComplexImage2D> pixels;
     int width, height, components;
@@ -193,6 +227,8 @@ int main(int argc, char** argv)
             for (int ix = 0; ix < c_kernelWidth; ++ix)
                 kernel.pixels[iy * c_kernelWidth + ix] = c_kernel[iy * c_kernelWidth + ix] / sum;
     }
+    ComplexImage2D kernelOrigional = kernel;
+    kernelOrigional = ShiftImage(kernelOrigional, kernelOrigional.m_width / 2, kernelOrigional.m_height / 2);
 
     // calculate the size that the images need to be, to be multiplied in frequency space
     size_t desiredWidth = NextPowerOf2(pixels[0].m_width + kernel.m_width + 1);
@@ -215,14 +251,35 @@ int main(int argc, char** argv)
 
     // put the image back together
     std::vector<unsigned char> outputPixels(pixels[0].m_width * pixels[0].m_height * components);
+    std::vector<float> outputPixelsF(pixels[0].m_width * pixels[0].m_height * components);
     for (size_t i = 0; i < outputPixels.size(); ++i)
+    {
         outputPixels[i] = (unsigned char)Clamp((float)pixels[i % components].pixels[i / components].real() * 256.0f, 0.0f, 255.0f);
+        outputPixelsF[i] = (float)pixels[i % components].pixels[i / components].real();
+    }
 
-    // write the output file
-    stbi_write_png(c_outFile, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
+    // write the output files
+    stbi_write_png(c_outFilePNG, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
+    stbi_write_hdr(c_outFileHDR, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixelsF.data());
+
+    // convolve manually
+    for (int c = 0; c < components; ++c)
+        Convolve(pixels[c], kernelOrigional);
+
+    // put the image back together
+    for (size_t i = 0; i < outputPixels.size(); ++i)
+    {
+        outputPixels[i] = (unsigned char)Clamp((float)pixels[i % components].pixels[i / components].real() * 256.0f, 0.0f, 255.0f);
+        outputPixelsF[i] = (float)pixels[i % components].pixels[i / components].real();
+    }
+
+    // write the output files
+    stbi_write_png(c_outFilePNG2, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
+    stbi_write_hdr(c_outFileHDR2, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixelsF.data());
 
     return 0;
 }
-
-// TODO: should work in float, and should handle sRGB
-// TODO: do i need to center the kernel at (0,0)? check that blog post
+// TODO: try box filtering an image and use this to undo it
+// TODO: could try something other than box, like tent.
+// TODO: could try a sharpening filter
+// TODO: could show the DFTs
