@@ -14,20 +14,29 @@
 
 #include <vector>
 
-static const char* c_inputFile = "../clear.png";
-static const char* c_outFilePNG = "out/clear.div.png";
-static const char* c_outFileHDR = "out/clear.div.hdr";
-static const char* c_outFilePNG2 = "out/clear2.div.png";
-static const char* c_outFileHDR2 = "out/clear2.div.hdr";
+#define SAVE_HDR() false
+
+static const char* c_inputFileDir = "../";
+static const char* c_inputFileBaseName = "clear";
 
 float c_kernel[] =
 {
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
-    1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
 };
-static const int c_kernelWidth = 3;
-static const int c_kernelHeight = 3;
+
+// up to 11x11 with the above
+static const int c_kernelWidth = 11;
+static const int c_kernelHeight = 11;
 
 float Clamp(float value, float themin, float themax)
 {
@@ -133,7 +142,23 @@ ComplexImage2D ShiftImage(const ComplexImage2D& image, size_t offsetx, size_t of
     return ret;
 }
 
-void AntiConvolve(ComplexImage2D& pixels, ComplexImage2D& kernel)
+void SaveLogMagnitude(ComplexImage2D& pixels, const char* baseFileName, const char* suffix, float multiplier)
+{
+    std::vector<unsigned char> out(pixels.m_width * pixels.m_height);
+
+    for (size_t i = 0; i < out.size(); ++i)
+    {
+        const auto& c = pixels.pixels[i];
+        float f = float(log(1.0f + float(sqrt(c.real() * c.real() + c.imag() * c.imag())) * multiplier));
+        out[i] = (unsigned char)Clamp(f * 256.0f, 0.0f, 255.0f);
+    }
+
+    char buffer[1024];
+    sprintf_s(buffer, "%s%s", baseFileName, suffix);
+    stbi_write_png(buffer, (int)pixels.m_width, (int)pixels.m_height, 1, out.data(), 0);
+}
+
+void AntiConvolve(ComplexImage2D& pixels, ComplexImage2D& kernel, const char* baseFileName, bool DFTKernel)
 {
     // DFT the image
     ComplexImage2D pixelsFT;
@@ -143,6 +168,8 @@ void AntiConvolve(ComplexImage2D& pixels, ComplexImage2D& kernel)
     if (error)
         printf(error);
 
+    SaveLogMagnitude(pixelsFT, baseFileName, "dft.pre.png", 0.1f);
+
     // DFT the kernel
     ComplexImage2D kernelFT;
     error = nullptr;
@@ -151,9 +178,14 @@ void AntiConvolve(ComplexImage2D& pixels, ComplexImage2D& kernel)
     if (error)
         printf(error);
 
+    if (DFTKernel)
+        SaveLogMagnitude(kernelFT, baseFileName, "dft.kernel.png", 1.0f);
+
     // Anti convolve
     for (size_t i = 0; i < pixelsFT.pixels.size(); ++i)
         pixelsFT.pixels[i] /= kernelFT.pixels[i];
+
+    SaveLogMagnitude(pixelsFT, baseFileName, "dft.post.png", 0.001f);
 
     // Inverse DFT the image
     error = nullptr;
@@ -195,13 +227,15 @@ int main(int argc, char** argv)
     _mkdir("out");
 
     // Load the image
+    char fileName[1024];
     std::vector<ComplexImage2D> pixels;
     int width, height, components;
     {
-        unsigned char* pixels_ = stbi_load(c_inputFile, &width, &height, &components, 0);
+        sprintf_s(fileName, "%s%s.png", c_inputFileDir, c_inputFileBaseName);
+        unsigned char* pixels_ = stbi_load(fileName, &width, &height, &components, 0);
         if (!pixels_)
         {
-            printf("Could not load %s\n", c_inputFile);
+            printf("Could not load %s\n", fileName);
             return 1;
         }
 
@@ -231,8 +265,10 @@ int main(int argc, char** argv)
     kernelOrigional = ShiftImage(kernelOrigional, kernelOrigional.m_width / 2, kernelOrigional.m_height / 2);
 
     // calculate the size that the images need to be, to be multiplied in frequency space
-    size_t desiredWidth = NextPowerOf2(pixels[0].m_width + kernel.m_width + 1);
-    size_t desiredHeight = NextPowerOf2(pixels[0].m_height + kernel.m_height + 1);
+    //size_t desiredWidth = NextPowerOf2(pixels[0].m_width + kernel.m_width + 1);
+    //size_t desiredHeight = NextPowerOf2(pixels[0].m_height + kernel.m_height + 1);
+    size_t desiredWidth = NextPowerOf2(std::max(pixels[0].m_width, kernel.m_width));
+    size_t desiredHeight = NextPowerOf2(std::max(pixels[0].m_height, kernel.m_height));
 
     // zero pad the images to be the right size
     for (int c = 0; c < components; ++c)
@@ -245,7 +281,8 @@ int main(int argc, char** argv)
     // Anti convolve each channel and remove the extra bordering we put on
     for (int c = 0; c < components; ++c)
     {
-        AntiConvolve(pixels[c], kernel);
+        sprintf(fileName, "out/%s.%i.", c_inputFileBaseName, c);
+        AntiConvolve(pixels[c], kernel, fileName, c == 0);
         pixels[c] = UnZeroPad(pixels[c], width, height);
     }
 
@@ -259,8 +296,13 @@ int main(int argc, char** argv)
     }
 
     // write the output files
-    stbi_write_png(c_outFilePNG, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
-    stbi_write_hdr(c_outFileHDR, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixelsF.data());
+    sprintf_s(fileName, "out/%s.unfilter.png", c_inputFileBaseName);
+    stbi_write_png(fileName, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
+
+#if SAVE_HDR()
+    sprintf_s(fileName, "out/%s.unfilter.hdr", c_inputFileBaseName);
+    stbi_write_hdr(fileName, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixelsF.data());
+#endif
 
     // convolve manually
     for (int c = 0; c < components; ++c)
@@ -274,13 +316,23 @@ int main(int argc, char** argv)
     }
 
     // write the output files
-    stbi_write_png(c_outFilePNG2, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
-    stbi_write_hdr(c_outFileHDR2, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixelsF.data());
+    sprintf_s(fileName, "out/%s.refilter.png", c_inputFileBaseName);
+    stbi_write_png(fileName, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixels.data(), 0);
+
+#if SAVE_HDR()
+    sprintf_s(fileName, "out/%s.refilter.hdr", c_inputFileBaseName);
+    stbi_write_hdr(fileName, (int)pixels[0].m_width, (int)pixels[0].m_height, components, outputPixelsF.data());
+#endif
 
     return 0;
 }
+// TODO: show the DFT of the kernel before it's grown
 
+// TODO: show the DFTs with python, using the colorful scale
 // TODO: could show the DFTs
 // TODO: could try a sharpening filter
 // TODO: it isn't working for filters that aren't box filter. should investigate why.
 // TODO: it isn't working for an image that you did an actual 3x3 box filter on either!
+
+// TODO: this is really odd results and i don't understand it.
+// TODO: could show the results of different sized kernels
