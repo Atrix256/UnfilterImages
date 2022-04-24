@@ -336,3 +336,4 @@ int main(int argc, char** argv)
 
 // TODO: this is really odd results and i don't understand it.
 // TODO: could show the results of different sized kernels
+// TODO: try sobel, but don't normalize to 1! -1,0,1  -2, 0, 2  -1,0,1
