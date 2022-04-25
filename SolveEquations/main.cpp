@@ -14,7 +14,7 @@
 #define OUTPUT_FILTERED_IMAGE() false
 
 static const char* c_inputFileDir = "../";
-static const char* c_inputFileBaseName = "clear64.box3x3";
+static const char* c_inputFileBaseName = "clear64";
 
 float c_kernel[] =
 {
@@ -23,8 +23,8 @@ float c_kernel[] =
     1.0f, 1.0f, 1.0f
 };
 
-static const int c_kernelWidth = 3;
-static const int c_kernelHeight = 3;
+static const int c_kernelWidth = 2;
+static const int c_kernelHeight = 1;
 
 static const int c_kernelRadiusX = int(c_kernelWidth / 2);
 static const int c_kernelRadiusY = int(c_kernelHeight / 2);
@@ -50,7 +50,20 @@ struct AugmentedMatrix
         m_pages.resize(numPages);
         {
             for (uint64_t i = 0; i < numPages; ++i)
-                m_pages[i] = (float*)calloc(pageSizeFloats,sizeof(float));
+            {
+                if (i < numPages - 1)
+                {
+                    m_pages[i] = new float[pageSizeFloats];
+                    memset(m_pages[i], 0, pageSizeFloats * sizeof(float));
+                }
+                else
+                {
+                    uint64_t remainderRows = numUnknowns - (numPages - 1) * m_rowsPerPage;
+                    uint64_t remainderRowsFloats = remainderRows * (numUnknowns + 1);
+                    m_pages[i] = new float[remainderRowsFloats];
+                    memset(m_pages[i], 0, remainderRowsFloats * sizeof(float));
+                }
+            }
         }
         m_temporaryRow.resize(numUnknowns + 1);
     }
@@ -65,12 +78,14 @@ struct AugmentedMatrix
     ~AugmentedMatrix()
     {
         for (float* p : m_pages)
-            free(p);
+            delete[] p;
         m_pages.clear();
     }
 
     std::vector<float> Solve()
     {
+        print("out/start");
+
         // solve each column
         {
             int lastPercent = -1;
@@ -87,6 +102,8 @@ struct AugmentedMatrix
             printf("\r100.00%%\n");
         }
 
+        print("out/end");
+
         // now gather the results
         std::vector<float> results(m_numUnknowns);
         for (uint64_t index = 0; index < m_numUnknowns; ++index)
@@ -95,6 +112,31 @@ struct AugmentedMatrix
     }
 
 private:
+
+    void print(const char* fileNameBase)
+    {
+        static int count = -1;
+        count++;
+        char fileName[1024];
+        sprintf_s(fileName, "%s.%i.csv", fileNameBase, count);
+
+        FILE* file = nullptr;
+        fopen_s(&file, fileName, "w+b");
+        if (!file)
+        {
+            printf("could not open %s", fileName);
+            ((int*)0)[0] = 0;
+        }
+
+        for (uint64_t i = 0; i < m_numUnknowns; ++i)
+        {
+            float* row = GetRow(i);
+            for (uint64_t j = 0; j < m_numUnknowns + 1; ++j)
+                fprintf(file, "\"%f\",", row[j]);
+            fprintf(file, "\n");
+        }
+        fclose(file);
+    }
 
     void SolveColumn(uint64_t columnIndex)
     {
@@ -106,6 +148,13 @@ private:
             rowIndex++;
             row = GetRow(rowIndex);
         }
+        if (rowIndex == m_numUnknowns)
+        {
+            // TODO: what to do about this??
+            printf("ERROR!");
+            return;
+            //((int*)0)[0] = 0;
+        }
 
         //2) Swap this row with the row it should be in
         SwapRows(rowIndex, columnIndex);
@@ -115,7 +164,7 @@ private:
         //3) Make this row have a 1 in the column
         {
             float rowValue = row[columnIndex];
-            for (uint64_t index = 0; index < m_numUnknowns; ++index)
+            for (uint64_t index = 0; index < m_numUnknowns + 1; ++index)
                 row[index] /= rowValue;
             row[columnIndex] = 1.0f; // avoid numerical issues
         }
@@ -332,8 +381,6 @@ int main(int argc, char** argv)
     return 0;
 }
 
-// TODO: this isn't working yet. Could maybe try doubles instead of floats...
-
-// NOTE: 512x512 was too much to fit into memory so went to 256x256. numPixels is squared, so it's dimension^4.
+// NOTE: 512x512 was too much to fit into memory so went to 256x256 and then 64x64. numPixels is squared, so it's dimension^4.
 // could try using https://petsc.org/release/overview/
 // or something else from https://twitter.com/Atrix256/status/1518338372829204480?s=20&t=MQXKkpGKHmqQMr38VkmBiw
